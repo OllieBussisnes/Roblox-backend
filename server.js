@@ -19,13 +19,17 @@ app.get("/check-rank", async (req, res) => {
             return res.status(400).json({ error: "Username is required" });
         }
 
-        // Get user ID from Roblox API
-        const userResponse = await axios.get(`https://users.roblox.com/v1/users/search?keyword=${username}&limit=10`);
+        // Get user ID from Roblox API (corrected limit)
+        const userResponse = await axios.get(`https://users.roblox.com/v1/users/search?keyword=${username}&limit=25`);
         const user = userResponse.data.data.find(user => user.name.toLowerCase() === username.toLowerCase());
 
         if (!user) {
             return res.status(404).json({ error: "User not found" });
         }
+
+        // Get user description
+        const userInfoResponse = await axios.get(`https://users.roblox.com/v1/users/${user.id}`);
+        const description = userInfoResponse.data.description || "";
 
         // Get rank in group
         const rankResponse = await axios.get(`https://groups.roblox.com/v1/users/${user.id}/groups/roles`);
@@ -37,12 +41,14 @@ app.get("/check-rank", async (req, res) => {
 
         res.json({
             username: user.name,
+            userId: user.id,
             rank: groupData.role.rank,
-            role: groupData.role.name
+            role: groupData.role.name,
+            description: description
         });
 
     } catch (error) {
-        res.status(500).json({ error: "Failed to check rank" });
+        res.status(500).json({ error: "Failed to check rank", details: error.message });
     }
 });
 
