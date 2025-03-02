@@ -1,26 +1,39 @@
+import express from "express";
+import axios from "axios";
+
+const app = express();
+const port = process.env.PORT || 10000;
+
+app.use(express.json());
+
 app.get("/verify", async (req, res) => {
-    const username = req.query.username;
-    if (!username) {
-      return res.status(400).json({ success: false, message: "Username is required." });
-    }
-  
+    const { username } = req.query; // Get the username from query parameter
+
     try {
-      const user = await axios.get(`https://users.roblox.com/v1/users/search?keyword=${username}&limit=10`);
-      const foundUser = user.data.data.find(u => u.name === username);
-  
-      if (foundUser) {
-        return res.json({
-          success: true,
-          message: "User found!",
-          userId: foundUser.id,
-          username: foundUser.name
+        if (!username) {
+            return res.status(400).json({ success: false, message: "Username is required!" });
+        }
+
+        // Make an API call to Roblox API to check if the user exists
+        const response = await axios.get(`https://users.roblox.com/v1/users/search?keyword=${username}&limit=10`);
+        const user = response.data.data.find(user => user.name === username);
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        res.json({
+            success: true,
+            message: "User found!",
+            userId: user.id,
+            username: user.name
         });
-      } else {
-        return res.status(404).json({ success: false, message: "User not found" });
-      }
     } catch (error) {
-      console.error("Error fetching user:", error);
-      return res.status(500).json({ success: false, message: "Error verifying user" });
+        console.error(error);
+        res.status(500).json({ success: false, message: "Error verifying user" });
     }
-  });
-  
+});
+
+app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+});
