@@ -1,64 +1,58 @@
 const express = require("express");
-const cors = require("cors");
 const axios = require("axios");
+const cors = require("cors");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
 app.use(cors());
-app.use(express.json());
 
-const GROUP_ID = "6057393"; // Change to your Roblox group ID
-
-// Endpoint to verify a user's rank and emoji combo
-app.get("/verify", async (req, res) => {
-    const { username } = req.query;
-    if (!username) {
-        return res.status(400).json({ success: false, message: "Username is required." });
-    }
-
+// ✅ Helper function to fetch user info
+async function getUserInfo(username) {
     try {
-        // Get user ID from Roblox API
-        const userResponse = await axios.get(`https://users.roblox.com/v1/usernames/users`, {
-            data: { usernames: [username], excludeBannedUsers: true }
+        console.log(`🔎 Searching for user: ${username}`);
+        
+        // ✅ Use the correct Roblox API
+        const response = await axios.post("https://users.roblox.com/v1/users/search", {
+            keyword: username,
+            limit: 1
         });
 
-        if (userResponse.data.data.length === 0) {
-            return res.status(404).json({ success: false, message: "User not found." });
+        // ✅ Ensure data is valid
+        if (!response.data || !response.data.data || response.data.data.length === 0) {
+            console.log(`❌ User not found: ${username}`);
+            return null;
         }
 
-        const userId = userResponse.data.data[0].id;
-
-        // Get user's rank in the group
-        const rankResponse = await axios.get(`https://groups.roblox.com/v1/users/${userId}/groups/roles`);
-        const groupInfo = rankResponse.data.data.find(group => group.group.id.toString() === GROUP_ID);
-
-        if (!groupInfo) {
-            return res.status(403).json({ success: false, message: "User is not in the group." });
-        }
-
-        const userRank = groupInfo.role.rank;
-        if (userRank < 8) {
-            return res.status(403).json({ success: false, message: "You must be rank 8+ to access this website." });
-        }
-
-        // Get user's description
-        const descriptionResponse = await axios.get(`https://users.roblox.com/v1/users/${userId}`);
-        const description = descriptionResponse.data.description || "";
-
-        // Generate an emoji combo
-        const emojiCombo = "🔥⭐"; // Change this to a dynamically generated emoji combo if needed
-
-        // Check if the user's description contains the required emoji combo
-        const emojiVerified = description.includes(emojiCombo);
-
-        res.json({ success: true, username, rank: userRank, emojiVerified, emojiCombo });
+        return response.data.data[0]; // First result
     } catch (error) {
-        console.error("Error verifying user:", error.message);
+        console.error("❌ Error fetching user:", error.message);
+        return null;
+    }
+}
+
+// ✅ Verify route
+app.get("/verify", async (req, res) => {
+    try {
+        const username = req.query.username;
+        if (!username) {
+            return res.status(400).json({ success: false, message: "Username is required" });
+        }
+
+        // Get user info
+        const user = await getUserInfo(username);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        return res.json({ success: true, user });
+    } catch (error) {
+        console.error("❌ Internal Server Error:", error.message);
         res.status(500).json({ success: false, message: "Internal server error." });
     }
 });
 
+// ✅ Start the server
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`✅ Server running on port ${PORT}`);
 });
