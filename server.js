@@ -1,52 +1,81 @@
-const express = require("express");
-const axios = require("axios");
-const cors = require("cors");
+const express = require('express');
+const fetch = require('node-fetch');
+const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+const PORT = 3000;
 
-app.use(cors());
-app.use(express.json());
+app.use(cors()); // Allow frontend requests
 
-app.get("/", (req, res) => {
-    res.send("Roblox Backend is Live! 🚀");
-});
+// ✅ Randomly generate 5 emojis as the required combo
+function getRandomEmojis() {
+    const emojiList = ["🚀", "🔥", "✨", "💎", "🎉", "🌟", "🦄", "📚", "⚡", "🎮", "🔑", "🔷"];
+    return Array.from({ length: 5 }, () => emojiList[Math.floor(Math.random() * emojiList.length)]);
+}
 
-// Route to verify Roblox username
-app.get("/verify", async (req, res) => {
+// Store required emojis for each user
+const userEmojis = {};
+
+// ✅ Route: Verify a Roblox username
+app.get('/verify', async (req, res) => {
     try {
         const username = req.query.username;
-        if (!username) {
-            return res.status(400).json({ success: false, message: "Username is required!" });
+        if (!username) return res.json({ success: false, message: "No username provided!" });
+
+        // Step 1: Get User ID from Roblox
+        const userResponse = await fetch(`https://users.roblox.com/v1/usernames/users`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ usernames: [username], excludeBannedUsers: true })
+        });
+
+        const userData = await userResponse.json();
+        if (!userData.data || userData.data.length === 0) {
+            return res.json({ success: false, message: "User not found!" });
         }
 
-        console.log(`🔍 Searching for user: ${username}`);
+        const userId = userData.data[0].id;
 
-        // Fetch user data from Roblox API
-        const response = await axios.get(`https://users.roblox.com/v1/users/search?keyword=${username}`);
+        // Step 2: Fetch the User’s Description
+        const descriptionResponse = await fetch(`https://users.roblox.com/v1/users/${userId}`);
+        const descriptionData = await descriptionResponse.json();
+        const description = descriptionData.description || "";
 
-        // Extract user data
-        const users = response.data.data;
-        const user = users.find(u => u.name.toLowerCase() === username.toLowerCase());
-
-        if (!user) {
-            return res.status(404).json({ success: false, message: "User not found" });
+        // Step 3: Get or Assign the Required Emoji Combo
+        if (!userEmojis[username]) {
+            userEmojis[username] = getRandomEmojis();
         }
+        const requiredEmojis = userEmojis[username];
 
-        return res.json({
-            success: true,
-            message: "User found!",
-            userId: user.id,
-            username: user.name
+        // Step 4: Check if All Emojis are Present
+        const hasAllEmojis = requiredEmojis.every(emoji => description.includes(emoji));
+
+        // Step 5: Send the Final Response
+        res.json({
+            success: hasAllEmojis,
+            message: hasAllEmojis ? "Verification successful!" : "Missing required emojis in description.",
+            userId,
+            username,
+            description,
+            requiredEmojis
         });
 
     } catch (error) {
-        console.error("❌ Error fetching user:", error.message);
-        return res.status(500).json({ success: false, message: "Internal server error" });
+        console.error("Error verifying user:", error);
+        res.status(500).json({ success: false, message: "Internal server error." });
     }
 });
 
-// Start the server
+// ✅ Route: Get Required Emojis for a Username
+app.get('/emoji', (req, res) => {
+    const username = req.query.username;
+    if (!username || !userEmojis[username]) {
+        return res.json({ success: false, message: "No emoji combo found for this user." });
+    }
+    res.json({ success: true, requiredEmojis: userEmojis[username] });
+});
+
+// ✅ Start the Server
 app.listen(PORT, () => {
-    console.log(`✅ Server running on port ${PORT}`);
+    console.log(`Backend running on http://localhost:${PORT}`);
 });
