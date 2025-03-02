@@ -3,57 +3,61 @@ const axios = require("axios");
 const cors = require("cors");
 
 const app = express();
-const PORT = process.env.PORT || 10000;
-const GROUP_ID = 6057393;
+const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+app.use(cors()); // Allows frontend to access the backend
+app.use(express.json()); // Enables JSON support
 
-app.get("/", (req, res) => {
-    res.send("Backend is working!");
-});
+const GROUP_ID = 6057393; // Your Roblox group ID
 
-// ✅ Fix CORS Issue: Proxy for Roblox API
-app.get("/get-user", async (req, res) => {
+// Function to get user rank in the group
+async function getUserRank(username) {
     try {
-        const { username } = req.query;
-        if (!username) return res.status(400).json({ error: "Username is required" });
+        const response = await axios.get(`https://groups.roblox.com/v1/groups/${GROUP_ID}/users`);
+        const users = response.data.data;
 
-        const response = await axios.get(`https://users.roblox.com/v1/users/search?keyword=${username}&limit=10`);
-        res.json(response.data);
+        const user = users.find(u => u.user.username.toLowerCase() === username.toLowerCase());
+        return user ? user.role.rank : 0;
     } catch (error) {
-        res.status(500).json({ error: "Failed to fetch user data" });
+        console.error("Error fetching user rank:", error);
+        return 0;
     }
-});
+}
 
-// ✅ Check Roblox Group Rank
-app.get("/check-rank", async (req, res) => {
+// Function to check if the user has the emoji combo in their description
+async function checkEmojiCombo(username) {
     try {
-        const { username } = req.query;
-        if (!username) return res.status(400).json({ error: "Username is required" });
+        const response = await axios.get(`https://users.roblox.com/v1/users/search?keyword=${username}&limit=1`);
+        const userId = response.data.data[0]?.id;
 
-        // 🔍 Get user ID
-        const userResponse = await axios.get(`https://users.roblox.com/v1/users/search?keyword=${username}&limit=10`);
-        const user = userResponse.data.data.find(user => user.name.toLowerCase() === username.toLowerCase());
+        if (!userId) return false;
 
-        if (!user) return res.status(404).json({ error: "User not found" });
-
-        // 🎭 Get group rank
-        const rankResponse = await axios.get(`https://groups.roblox.com/v1/users/${user.id}/groups/roles`);
-        const groupData = rankResponse.data.data.find(group => group.group.id === GROUP_ID);
-
-        if (!groupData) return res.status(404).json({ error: "User is not in the group" });
-
-        res.json({
-            username: user.name,
-            rank: groupData.role.rank,
-            role: groupData.role.name
-        });
-
+        const userInfo = await axios.get(`https://users.roblox.com/v1/users/${userId}`);
+        return userInfo.data.description.includes("🔑🌟"); // Change this to your required emoji combo
     } catch (error) {
-        res.status(500).json({ error: "Failed to check rank" });
+        console.error("Error fetching user info:", error);
+        return false;
     }
+}
+
+// The `/verify` route
+app.get("/verify", async (req, res) => {
+    const { username } = req.query;
+    if (!username) {
+        return res.status(400).json({ success: false, message: "Username required" });
+    }
+
+    const rank = await getUserRank(username);
+    const emojiVerified = await checkEmojiCombo(username);
+
+    res.json({
+        success: true,
+        rank: rank,
+        emojiVerified: emojiVerified,
+    });
 });
 
+// Start the server
 app.listen(PORT, () => {
-    console.log(`Backend is running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
