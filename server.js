@@ -6,53 +6,47 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 app.use(cors());
+app.use(express.json());
 
-// ✅ Helper function to fetch user info
-async function getUserInfo(username) {
-    try {
-        console.log(`🔎 Searching for user: ${username}`);
-        
-        // ✅ Use the correct Roblox API
-        const response = await axios.post("https://users.roblox.com/v1/users/search", {
-            keyword: username,
-            limit: 1
-        });
+app.get("/", (req, res) => {
+    res.send("Roblox Backend is Live! 🚀");
+});
 
-        // ✅ Ensure data is valid
-        if (!response.data || !response.data.data || response.data.data.length === 0) {
-            console.log(`❌ User not found: ${username}`);
-            return null;
-        }
-
-        return response.data.data[0]; // First result
-    } catch (error) {
-        console.error("❌ Error fetching user:", error.message);
-        return null;
-    }
-}
-
-// ✅ Verify route
+// Route to verify Roblox username
 app.get("/verify", async (req, res) => {
     try {
         const username = req.query.username;
         if (!username) {
-            return res.status(400).json({ success: false, message: "Username is required" });
+            return res.status(400).json({ success: false, message: "Username is required!" });
         }
 
-        // Get user info
-        const user = await getUserInfo(username);
+        console.log(`🔍 Searching for user: ${username}`);
+
+        // Fetch user data from Roblox API
+        const response = await axios.get(`https://users.roblox.com/v1/users/search?keyword=${username}`);
+
+        // Extract user data
+        const users = response.data.data;
+        const user = users.find(u => u.name.toLowerCase() === username.toLowerCase());
+
         if (!user) {
             return res.status(404).json({ success: false, message: "User not found" });
         }
 
-        return res.json({ success: true, user });
+        return res.json({
+            success: true,
+            message: "User found!",
+            userId: user.id,
+            username: user.name
+        });
+
     } catch (error) {
-        console.error("❌ Internal Server Error:", error.message);
-        res.status(500).json({ success: false, message: "Internal server error." });
+        console.error("❌ Error fetching user:", error.message);
+        return res.status(500).json({ success: false, message: "Internal server error" });
     }
 });
 
-// ✅ Start the server
+// Start the server
 app.listen(PORT, () => {
     console.log(`✅ Server running on port ${PORT}`);
 });
