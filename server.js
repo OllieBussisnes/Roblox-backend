@@ -1,46 +1,32 @@
 import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
-import fetch from "node-fetch"; // Ensure node-fetch is installed
-
-dotenv.config(); // Load environment variables
+import axios from "axios";
 
 const app = express();
-const port = process.env.PORT || 10000;
+const PORT = 10000;
 
-app.use(cors());
-app.use(express.json());
-
-// Root Route
-app.get("/", (req, res) => {
-    res.send("✅ Server is running!");
-});
-
-// Verify User Route
 app.get("/verify", async (req, res) => {
+    const { username } = req.query;
+
+    if (!username) {
+        return res.status(400).json({ success: false, message: "Username is required" });
+    }
+
     try {
-        const { username } = req.query;
-        if (!username) {
-            return res.status(400).json({ success: false, message: "Username is required" });
-        }
+        const response = await axios.get(`https://users.roblox.com/v1/users/search?keyword=${username}&limit=10`);
+        const users = response.data.data;
 
-        const robloxApiUrl = `https://users.roblox.com/v1/users/search?keyword=${username}&limit=1`;
-        const response = await fetch(robloxApiUrl);
-        const data = await response.json();
+        const foundUser = users.find(user => user.name.toLowerCase() === username.toLowerCase());
 
-        if (!data || !data.data || data.data.length === 0) {
+        if (!foundUser) {
             return res.status(404).json({ success: false, message: "User not found" });
         }
 
-        const user = data.data[0];
-        res.json({ success: true, message: "User found!", username: user.name, userId: user.id });
+        return res.json({ success: true, userId: foundUser.id, displayName: foundUser.displayName });
+
     } catch (error) {
-        console.error("Error verifying user:", error);
-        res.status(500).json({ success: false, message: "Internal server error." });
+        console.error("Error fetching data:", error);
+        return res.status(500).json({ success: false, message: "Error fetching data" });
     }
 });
 
-// Start Server
-app.listen(port, () => {
-    console.log(`🚀 Server running on port ${port}`);
-});
+app.listen(PORT, () => console.log(`✅ Server running on http://localhost:${PORT}`));
